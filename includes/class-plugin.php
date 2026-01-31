@@ -31,12 +31,21 @@ class Plugin {
 		if ( is_admin() ) {
 			add_action( 'admin_menu', array( $this, 'admin_menu' ) );
 			add_action( 'admin_init', array( $this, 'register_settings' ) );
+			
+			// Initialize AJAX handlers
+			AJAX_Handler::init();
 		}
 
-		// Tracking endpoints (open pixel, click tracking)
+		// Tracking endpoints (open pixel, click tracking, unsubscribe)
 		add_action( 'template_redirect', array( $this, 'handle_tracking' ) );
 
-		// Email filter to inject tracking
+		// Unsubscribe filter (early priority to block before sending)
+		$settings = get_option( 'sessypress_settings', array() );
+		if ( isset( $settings['enable_unsubscribe_filter'] ) && '1' === $settings['enable_unsubscribe_filter'] ) {
+			add_filter( 'wp_mail', array( $this, 'filter_unsubscribed_emails' ), 1 );
+		}
+
+		// Email filter to inject tracking (late priority after other modifications)
 		add_filter( 'wp_mail', array( $this, 'inject_tracking' ), 999 );
 	}
 
@@ -69,15 +78,34 @@ class Plugin {
 	}
 
 	/**
-	 * Handle tracking requests (open pixel, click tracking)
+	 * Handle tracking requests (open pixel, click tracking, unsubscribe)
 	 */
 	public function handle_tracking() {
 		if ( ! isset( $_GET['ses_track'] ) ) {
 			return;
 		}
 
+		// Handle unsubscribe requests separately
+		if ( isset( $_GET['ses_action'] ) && 'unsubscribe' === $_GET['ses_action'] ) {
+			$unsubscribe_manager = new Unsubscribe_Manager();
+			$unsubscribe_manager->handle_unsubscribe_request();
+			return;
+		}
+
+		// Handle regular tracking (opens, clicks)
 		$tracker = new Tracker();
 		$tracker->handle_tracking_request();
+	}
+
+	/**
+	 * Filter out unsubscribed emails
+	 *
+	 * @param array $args wp_mail arguments.
+	 * @return array Modified wp_mail arguments.
+	 */
+	public function filter_unsubscribed_emails( $args ) {
+		$unsubscribe_manager = new Unsubscribe_Manager();
+		return $unsubscribe_manager->filter_wp_mail( $args );
 	}
 
 	/**
@@ -93,30 +121,30 @@ class Plugin {
 	 */
 	public function admin_menu() {
 		add_menu_page(
-			__( 'SES Email Tracking', 'ses-sns-tracker' ),
-			__( 'Email Tracking', 'ses-sns-tracker' ),
+			__( 'SESSYPress Dashboard', 'sessypress' ),
+			__( 'SESSYPress', 'sessypress' ),
 			'manage_options',
-			'ses-sns-tracker',
+			'sessypress-dashboard',
 			array( $this, 'admin_dashboard' ),
 			'dashicons-email-alt',
 			30
 		);
 
 		add_submenu_page(
-			'ses-sns-tracker',
-			__( 'Dashboard', 'ses-sns-tracker' ),
-			__( 'Dashboard', 'ses-sns-tracker' ),
+			'sessypress-dashboard',
+			__( 'Dashboard', 'sessypress' ),
+			__( 'Dashboard', 'sessypress' ),
 			'manage_options',
-			'ses-sns-tracker',
+			'sessypress-dashboard',
 			array( $this, 'admin_dashboard' )
 		);
 
 		add_submenu_page(
-			'ses-sns-tracker',
-			__( 'Settings', 'ses-sns-tracker' ),
-			__( 'Settings', 'ses-sns-tracker' ),
+			'sessypress-dashboard',
+			__( 'Settings', 'sessypress' ),
+			__( 'Settings', 'sessypress' ),
 			'manage_options',
-			'ses-sns-tracker-settings',
+			'sessypress-settings',
 			array( $this, 'admin_settings' )
 		);
 	}
@@ -207,6 +235,34 @@ class Plugin {
 
 		if ( isset( $input['retention_days'] ) ) {
 			$sanitized['retention_days'] = absint( $input['retention_days'] );
+		}
+
+		// Day 3: Manual tracking settings
+		if ( isset( $input['enable_manual_tracking'] ) ) {
+			$sanitized['enable_manual_tracking'] = '1';
+		} else {
+			$sanitized['enable_manual_tracking'] = '0';
+		}
+
+		if ( isset( $input['use_ses_native_tracking'] ) ) {
+			$sanitized['use_ses_native_tracking'] = '1';
+		} else {
+			$sanitized['use_ses_native_tracking'] = '0';
+		}
+
+		if ( isset( $input['tracking_strategy'] ) ) {
+			$allowed_strategies = array( 'prefer_ses', 'prefer_manual', 'use_both', 'manual_only' );
+			if ( in_array( $input['tracking_strategy'], $allowed_strategies, true ) ) {
+				$sanitized['tracking_strategy'] = $input['tracking_strategy'];
+			} else {
+				$sanitized['tracking_strategy'] = 'prefer_ses';
+			}
+		}
+
+		if ( isset( $input['enable_unsubscribe_filter'] ) ) {
+			$sanitized['enable_unsubscribe_filter'] = '1';
+		} else {
+			$sanitized['enable_unsubscribe_filter'] = '0';
 		}
 
 		return $sanitized;

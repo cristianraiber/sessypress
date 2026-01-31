@@ -1,12 +1,17 @@
 <?php
 /**
  * Handle email opens and link clicks tracking
+ *
+ * @package SESSYPress
  */
 
-namespace SES_SNS_Tracker;
+namespace SESSYPress;
 
 defined( 'ABSPATH' ) || exit;
 
+/**
+ * Email tracking handler
+ */
 class Tracker {
 
 	/**
@@ -24,9 +29,7 @@ class Tracker {
 				$this->track_click();
 				break;
 
-			case 'unsubscribe':
-				$this->track_unsubscribe();
-				break;
+			// Unsubscribe is now handled separately by Unsubscribe_Manager
 		}
 	}
 
@@ -46,6 +49,7 @@ class Tracker {
 		$table = $wpdb->prefix . 'ses_email_tracking';
 
 		// Check if already tracked
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$exists = $wpdb->get_var( $wpdb->prepare(
 			"SELECT id FROM $table WHERE message_id = %s AND recipient = %s AND tracking_type = 'open' LIMIT 1",
 			$message_id,
@@ -53,6 +57,7 @@ class Tracker {
 		) );
 
 		if ( ! $exists ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$wpdb->insert(
 				$table,
 				array(
@@ -70,7 +75,7 @@ class Tracker {
 	}
 
 	/**
-	 * Track link click
+	 * Track link click with campaign analytics
 	 */
 	private function track_click() {
 		$message_id = isset( $_GET['mid'] ) ? sanitize_text_field( wp_unslash( $_GET['mid'] ) ) : '';
@@ -82,59 +87,18 @@ class Tracker {
 			exit;
 		}
 
-		global $wpdb;
-		$table = $wpdb->prefix . 'ses_email_tracking';
-
-		$wpdb->insert(
-			$table,
-			array(
-				'message_id'    => $message_id,
-				'tracking_type' => 'click',
-				'recipient'     => $recipient,
-				'url'           => $url,
-				'user_agent'    => isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : '',
-				'ip_address'    => $this->get_ip_address(),
-			),
-			array( '%s', '%s', '%s', '%s', '%s', '%s' )
+		// Use Link_Analytics to store click with UTM tracking
+		$link_analytics = new Link_Analytics();
+		$metadata       = array(
+			'user_agent' => isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : '',
+			'ip_address' => $this->get_ip_address(),
 		);
 
+		$link_analytics->store_click_with_campaign( $message_id, $recipient, $url, $metadata );
+
+		// Redirect to the original URL
 		wp_safe_redirect( $url );
 		exit;
-	}
-
-	/**
-	 * Track unsubscribe
-	 */
-	private function track_unsubscribe() {
-		$message_id = isset( $_GET['mid'] ) ? sanitize_text_field( wp_unslash( $_GET['mid'] ) ) : '';
-		$recipient  = isset( $_GET['r'] ) ? sanitize_email( wp_unslash( $_GET['r'] ) ) : '';
-
-		if ( ! $message_id || ! $recipient ) {
-			wp_safe_redirect( home_url() );
-			exit;
-		}
-
-		global $wpdb;
-		$table = $wpdb->prefix . 'ses_email_tracking';
-
-		$wpdb->insert(
-			$table,
-			array(
-				'message_id'    => $message_id,
-				'tracking_type' => 'unsubscribe',
-				'recipient'     => $recipient,
-				'user_agent'    => isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : '',
-				'ip_address'    => $this->get_ip_address(),
-			),
-			array( '%s', '%s', '%s', '%s', '%s' )
-		);
-
-		// Show unsubscribe confirmation
-		wp_die(
-			esc_html__( 'You have been successfully unsubscribed.', 'ses-sns-tracker' ),
-			esc_html__( 'Unsubscribed', 'ses-sns-tracker' ),
-			array( 'response' => 200 )
-		);
 	}
 
 	/**

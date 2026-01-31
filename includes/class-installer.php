@@ -86,12 +86,26 @@ class Installer {
 			KEY timestamp (timestamp)
 		) $charset_collate;";
 
+		// Table for global unsubscribe list
+		$table_unsubscribes = $wpdb->prefix . 'ses_unsubscribes';
+
+		$sql_unsubscribes = "CREATE TABLE IF NOT EXISTS $table_unsubscribes (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			email varchar(255) NOT NULL,
+			reason varchar(500) DEFAULT NULL,
+			unsubscribed_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (id),
+			UNIQUE KEY email (email),
+			KEY unsubscribed_at (unsubscribed_at)
+		) $charset_collate;";
+
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		dbDelta( $sql_events );
 		dbDelta( $sql_tracking );
+		dbDelta( $sql_unsubscribes );
 
 		// Store schema version
-		update_option( 'ses_sns_tracker_db_version', '1.0.0' );
+		update_option( 'ses_sns_tracker_db_version', '1.2.0' );
 	}
 
 	/**
@@ -103,15 +117,35 @@ class Installer {
 		
 		if ( $old_settings ) {
 			// Migrate old settings to new option name
-			update_option( 'sessypress_settings', $old_settings );
+			$migrated_settings = $old_settings;
+			
+			// Add new Day 3 settings with defaults
+			if ( ! isset( $migrated_settings['enable_manual_tracking'] ) ) {
+				$migrated_settings['enable_manual_tracking'] = '1';
+			}
+			if ( ! isset( $migrated_settings['use_ses_native_tracking'] ) ) {
+				$migrated_settings['use_ses_native_tracking'] = '0';
+			}
+			if ( ! isset( $migrated_settings['tracking_strategy'] ) ) {
+				$migrated_settings['tracking_strategy'] = 'prefer_ses';
+			}
+			if ( ! isset( $migrated_settings['enable_unsubscribe_filter'] ) ) {
+				$migrated_settings['enable_unsubscribe_filter'] = '1';
+			}
+			
+			update_option( 'sessypress_settings', $migrated_settings );
 		} else {
 			// Create new settings
 			$defaults = array(
-				'sns_secret_key'     => wp_generate_password( 32, false ),
-				'track_opens'        => '1',
-				'track_clicks'       => '1',
-				'sns_endpoint_slug'  => 'ses-sns-webhook',
-				'retention_days'     => 90,
+				'sns_secret_key'            => wp_generate_password( 32, false ),
+				'track_opens'               => '1',
+				'track_clicks'              => '1',
+				'sns_endpoint_slug'         => 'ses-sns-webhook',
+				'retention_days'            => 90,
+				'enable_manual_tracking'    => '1',
+				'use_ses_native_tracking'   => '0',
+				'tracking_strategy'         => 'prefer_ses',
+				'enable_unsubscribe_filter' => '1',
 			);
 
 			add_option( 'sessypress_settings', $defaults );
@@ -123,12 +157,17 @@ class Installer {
 	 */
 	private static function maybe_migrate_database() {
 		$current_version = get_option( 'ses_sns_tracker_db_version', '0.0.0' );
-		$target_version  = '1.1.0';
+		$target_version  = '1.2.0';
 
-		if ( version_compare( $current_version, $target_version, '<' ) ) {
+		if ( version_compare( $current_version, '1.1.0', '<' ) ) {
 			self::migrate_to_1_1_0();
-			update_option( 'ses_sns_tracker_db_version', $target_version );
 		}
+
+		if ( version_compare( $current_version, '1.2.0', '<' ) ) {
+			self::migrate_to_1_2_0();
+		}
+
+		update_option( 'ses_sns_tracker_db_version', $target_version );
 	}
 
 	/**
@@ -159,5 +198,49 @@ class Installer {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange
 			$wpdb->query( "ALTER TABLE $table ADD COLUMN event_metadata LONGTEXT DEFAULT NULL AFTER smtp_response" );
 		}
+	}
+
+	/**
+	 * Migrate to version 1.2.0
+	 * Add unsubscribe table and update settings
+	 */
+	private static function migrate_to_1_2_0() {
+		global $wpdb;
+
+		$charset_collate = $wpdb->get_charset_collate();
+
+		// Create unsubscribe table if it doesn't exist
+		$table_unsubscribes = $wpdb->prefix . 'ses_unsubscribes';
+
+		$sql = "CREATE TABLE IF NOT EXISTS $table_unsubscribes (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			email varchar(255) NOT NULL,
+			reason varchar(500) DEFAULT NULL,
+			unsubscribed_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (id),
+			UNIQUE KEY email (email),
+			KEY unsubscribed_at (unsubscribed_at)
+		) $charset_collate;";
+
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		dbDelta( $sql );
+
+		// Update settings with new Day 3 options
+		$settings = get_option( 'sessypress_settings', array() );
+		
+		if ( ! isset( $settings['enable_manual_tracking'] ) ) {
+			$settings['enable_manual_tracking'] = '1';
+		}
+		if ( ! isset( $settings['use_ses_native_tracking'] ) ) {
+			$settings['use_ses_native_tracking'] = '0';
+		}
+		if ( ! isset( $settings['tracking_strategy'] ) ) {
+			$settings['tracking_strategy'] = 'prefer_ses';
+		}
+		if ( ! isset( $settings['enable_unsubscribe_filter'] ) ) {
+			$settings['enable_unsubscribe_filter'] = '1';
+		}
+
+		update_option( 'sessypress_settings', $settings );
 	}
 }

@@ -1,22 +1,45 @@
 <?php
 /**
  * Inject tracking into outgoing emails
+ *
+ * @package SESSYPress
  */
 
-namespace SES_SNS_Tracker;
+namespace SESSYPress;
 
 defined( 'ABSPATH' ) || exit;
 
+/**
+ * Smart tracking injector
+ */
 class Tracking_Injector {
 
 	/**
 	 * Inject tracking into email
+	 *
+	 * @param array $args wp_mail arguments.
+	 * @return array Modified wp_mail arguments.
 	 */
 	public function inject( $args ) {
-		$settings = get_option( 'ses_sns_tracker_settings', array() );
+		// Get settings from new option name (with backwards compatibility).
+		$settings = get_option( 'sessypress_settings', array() );
+		
+		if ( empty( $settings ) ) {
+			$settings = get_option( 'ses_sns_tracker_settings', array() );
+		}
 
-		$track_opens  = isset( $settings['track_opens'] ) && '1' === $settings['track_opens'];
-		$track_clicks = isset( $settings['track_clicks'] ) && '1' === $settings['track_clicks'];
+		// Check if manual tracking is enabled.
+		$enable_manual_tracking = isset( $settings['enable_manual_tracking'] ) && '1' === $settings['enable_manual_tracking'];
+		$track_opens            = isset( $settings['track_opens'] ) && '1' === $settings['track_opens'];
+		$track_clicks           = isset( $settings['track_clicks'] ) && '1' === $settings['track_clicks'];
+
+		// Check tracking strategy.
+		$tracking_strategy = isset( $settings['tracking_strategy'] ) ? $settings['tracking_strategy'] : 'prefer_ses';
+
+		// Smart detection: Only inject if should inject based on strategy.
+		if ( ! $this->should_inject_tracking( $args, $settings ) ) {
+			return $args;
+		}
 
 		if ( ! $track_opens && ! $track_clicks ) {
 			return $args;
@@ -179,5 +202,84 @@ class Tracking_Injector {
 		);
 
 		return $message;
+	}
+
+	/**
+	 * Determine if tracking should be injected
+	 *
+	 * @param array $args     wp_mail arguments.
+	 * @param array $settings Plugin settings.
+	 * @return bool True if should inject, false otherwise.
+	 */
+	private function should_inject_tracking( $args, $settings ) {
+		// Check if manual tracking is explicitly disabled.
+		$enable_manual_tracking = isset( $settings['enable_manual_tracking'] ) && '1' === $settings['enable_manual_tracking'];
+
+		// Get tracking strategy.
+		$tracking_strategy = isset( $settings['tracking_strategy'] ) ? $settings['tracking_strategy'] : 'prefer_ses';
+
+		// Check if SES Configuration Set header is present.
+		$has_config_set = $this->has_configuration_set_header( $args );
+
+		// Decision matrix based on strategy:
+		switch ( $tracking_strategy ) {
+			case 'prefer_ses':
+				// Only inject if no Configuration Set is present.
+				if ( $has_config_set ) {
+					return false;
+				}
+				return $enable_manual_tracking;
+
+			case 'prefer_manual':
+				// Always inject if manual tracking is enabled.
+				return $enable_manual_tracking;
+
+			case 'use_both':
+				// Inject regardless of Configuration Set.
+				return $enable_manual_tracking;
+
+			case 'manual_only':
+				// Only use manual tracking, ignore Configuration Set.
+				return $enable_manual_tracking;
+
+			default:
+				// Default: prefer SES native tracking.
+				if ( $has_config_set ) {
+					return false;
+				}
+				return $enable_manual_tracking;
+		}
+	}
+
+	/**
+	 * Check if wp_mail args contain X-SES-CONFIGURATION-SET header
+	 *
+	 * @param array $args wp_mail arguments.
+	 * @return bool True if Configuration Set header is present.
+	 */
+	private function has_configuration_set_header( $args ) {
+		if ( ! isset( $args['headers'] ) ) {
+			return false;
+		}
+
+		$headers = $args['headers'];
+
+		// Convert to array if string.
+		if ( is_string( $headers ) ) {
+			$headers = explode( "\n", $headers );
+		}
+
+		// Check each header.
+		foreach ( $headers as $header ) {
+			if ( stripos( $header, 'X-SES-CONFIGURATION-SET:' ) === 0 ) {
+				return true;
+			}
+			// Also check for alternative formats.
+			if ( stripos( $header, 'X-SES-CONFIG-SET:' ) === 0 ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 }
