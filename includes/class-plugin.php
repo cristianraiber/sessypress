@@ -290,6 +290,30 @@ class Plugin {
 			'sessypress-settings',
 			'sessypress_tracking_section'
 		);
+
+		// Security Settings Section.
+		add_settings_section(
+			'sessypress_security_section',
+			__( 'Webhook Security', 'sessypress' ),
+			array( $this, 'render_security_section_callback' ),
+			'sessypress-settings'
+		);
+
+		add_settings_field(
+			'validate_aws_ip',
+			__( 'AWS IP Validation', 'sessypress' ),
+			array( $this, 'render_aws_ip_validation_field' ),
+			'sessypress-settings',
+			'sessypress_security_section'
+		);
+
+		add_settings_field(
+			'rate_limit_info',
+			__( 'Rate Limiting', 'sessypress' ),
+			array( $this, 'render_rate_limit_info_field' ),
+			'sessypress-settings',
+			'sessypress_security_section'
+		);
 	}
 
 	/**
@@ -350,6 +374,13 @@ class Plugin {
 			$sanitized['enable_unsubscribe_filter'] = '0';
 		}
 
+		// Security settings
+		if ( isset( $input['validate_aws_ip'] ) ) {
+			$sanitized['validate_aws_ip'] = '1';
+		} else {
+			$sanitized['validate_aws_ip'] = '0';
+		}
+
 		return $sanitized;
 	}
 
@@ -405,6 +436,10 @@ class Plugin {
 
 	public function render_tracking_section_callback() {
 		echo '<p>' . esc_html__( 'Configure email tracking features and data retention.', 'sessypress' ) . '</p>';
+	}
+
+	public function render_security_section_callback() {
+		echo '<p>' . esc_html__( 'Advanced security features to protect your webhook endpoints.', 'sessypress' ) . '</p>';
 	}
 
 	public function render_endpoint_slug_field() {
@@ -504,6 +539,48 @@ class Plugin {
 		<?php esc_html_e( 'days', 'sessypress' ); ?>
 		<p class="description">
 			<?php esc_html_e( 'Automatically delete tracking data older than this many days. Set to 0 to keep data forever.', 'sessypress' ); ?>
+		</p>
+		<?php
+	}
+
+	public function render_aws_ip_validation_field() {
+		$settings = get_option( 'sessypress_settings', array() );
+		$checked  = isset( $settings['validate_aws_ip'] ) ? (bool) $settings['validate_aws_ip'] : true;
+		?>
+		<fieldset>
+			<label>
+				<input 
+					type="checkbox" 
+					name="sessypress_settings[validate_aws_ip]" 
+					value="1" 
+					<?php checked( $checked ); ?> 
+				/>
+				<?php esc_html_e( 'Only accept webhooks from AWS IP addresses', 'sessypress' ); ?>
+			</label>
+			<p class="description">
+				<?php esc_html_e( 'Validates that incoming webhook requests originate from AWS servers. Recommended for production. Automatically downloads and caches AWS IP ranges daily.', 'sessypress' ); ?>
+				<br><br>
+				<strong><?php esc_html_e( 'Security layers active:', 'sessypress' ); ?></strong><br>
+				✅ <?php esc_html_e( 'Secret key validation (timing-safe comparison)', 'sessypress' ); ?><br>
+				✅ <?php esc_html_e( 'SNS signature verification (AWS cryptographic signatures)', 'sessypress' ); ?><br>
+				<?php if ( $checked ) : ?>
+					✅ <?php esc_html_e( 'AWS IP allowlist (IP ranges verification)', 'sessypress' ); ?><br>
+				<?php else : ?>
+					⚠️ <?php esc_html_e( 'AWS IP allowlist (disabled)', 'sessypress' ); ?><br>
+				<?php endif; ?>
+				✅ <?php esc_html_e( 'Rate limiting (300 req/min, 3,000 req/hour per IP)', 'sessypress' ); ?>
+			</p>
+		</fieldset>
+		<?php
+	}
+
+	public function render_rate_limit_info_field() {
+		?>
+		<p class="description">
+			<?php esc_html_e( 'Rate limiting is always active and cannot be disabled. Current limits:', 'sessypress' ); ?><br>
+			• <strong>300</strong> <?php esc_html_e( 'requests per minute per IP', 'sessypress' ); ?><br>
+			• <strong>3,000</strong> <?php esc_html_e( 'requests per hour per IP', 'sessypress' ); ?><br><br>
+			<?php esc_html_e( 'These limits protect against webhook abuse and denial-of-service attacks.', 'sessypress' ); ?>
 		</p>
 		<?php
 	}

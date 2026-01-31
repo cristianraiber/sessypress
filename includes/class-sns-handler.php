@@ -31,12 +31,36 @@ class SNS_Handler {
 	private $event_publishing_handler;
 
 	/**
+	 * SNS Signature verifier instance
+	 *
+	 * @var SNS_Signature_Verifier
+	 */
+	private $signature_verifier;
+
+	/**
+	 * AWS IP validator instance
+	 *
+	 * @var AWS_IP_Validator
+	 */
+	private $ip_validator;
+
+	/**
+	 * Rate limiter instance
+	 *
+	 * @var Webhook_Rate_Limiter
+	 */
+	private $rate_limiter;
+
+	/**
 	 * Constructor
 	 */
 	public function __construct() {
 		$this->detector                   = new Event_Detector();
 		$this->sns_notification_handler   = new SNS_Notification_Handler();
 		$this->event_publishing_handler   = new Event_Publishing_Handler();
+		$this->signature_verifier         = new SNS_Signature_Verifier();
+		$this->ip_validator               = new AWS_IP_Validator();
+		$this->rate_limiter               = new Webhook_Rate_Limiter();
 	}
 
 	/**
@@ -46,9 +70,23 @@ class SNS_Handler {
 	 * @return \WP_REST_Response|\WP_Error
 	 */
 	public function process( $request ) {
-		// Validate secret key
+		// 1. Rate limiting (first line of defense)
+		$client_ip = $this->get_client_ip( $request );
+		if ( ! $this->rate_limiter->check( $client_ip ) ) {
+			return new \WP_Error( 'rate_limit_exceeded', 'Too many requests', array( 'status' => 429 ) );
+		}
+
+		// 2. Validate secret key
 		if ( ! $this->validate_secret( $request ) ) {
 			return new \WP_Error( 'invalid_secret', 'Invalid secret key', array( 'status' => 403 ) );
+		}
+
+		// 3. AWS IP validation (optional, can be disabled in settings)
+		if ( $this->is_ip_validation_enabled() ) {
+			if ( ! $this->ip_validator->is_aws_ip( $client_ip ) ) {
+				error_log( 'SESSYPress: Request from non-AWS IP: ' . $client_ip );
+				return new \WP_Error( 'invalid_source', 'Request must come from AWS IP', array( 'status' => 403 ) );
+			}
 		}
 
 		$body = $request->get_body();
@@ -56,6 +94,14 @@ class SNS_Handler {
 
 		if ( ! $data ) {
 			return new \WP_Error( 'invalid_json', 'Invalid JSON payload', array( 'status' => 400 ) );
+		}
+
+		// 4. SNS signature verification (for SNS notifications only)
+		if ( $this->is_sns_message( $data ) ) {
+			if ( ! $this->signature_verifier->verify( $data ) ) {
+				error_log( 'SESSYPress: SNS signature verification failed' );
+				return new \WP_Error( 'invalid_signature', 'Invalid SNS signature', array( 'status' => 403 ) );
+			}
 		}
 
 		// Detect message type
@@ -153,5 +199,60 @@ class SNS_Handler {
 		}
 
 		return new \WP_Error( 'unknown_message_format', 'Unknown message format', array( 'status' => 400 ) );
+	}
+
+	/**
+	 * Get client IP address
+	 *
+	 * @param \WP_REST_Request $request REST request object
+	 * @return string Client IP address
+	 */
+	private function get_client_ip( $request ) {
+		// Try various headers (in order of preference)
+		$headers = array(
+			'HTTP_X_FORWARDED_FOR',
+			'HTTP_X_REAL_IP',
+			'HTTP_CLIENT_IP',
+			'REMOTE_ADDR',
+		);
+
+		foreach ( $headers as $header ) {
+			$ip = $request->get_header( strtolower( str_replace( 'HTTP_', '', $header ) ) );
+			if ( ! empty( $ip ) ) {
+				// X-Forwarded-For can contain multiple IPs (client, proxy1, proxy2)
+				// Use first one (original client)
+				if ( strpos( $ip, ',' ) !== false ) {
+					$ips = explode( ',', $ip );
+					$ip  = trim( $ips[0] );
+				}
+
+				if ( filter_var( $ip, FILTER_VALIDATE_IP ) ) {
+					return $ip;
+				}
+			}
+		}
+
+		// Fallback to $_SERVER['REMOTE_ADDR']
+		return isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '0.0.0.0';
+	}
+
+	/**
+	 * Check if IP validation is enabled
+	 *
+	 * @return bool True if enabled
+	 */
+	private function is_ip_validation_enabled() {
+		$settings = get_option( 'sessypress_settings', array() );
+		return isset( $settings['validate_aws_ip'] ) ? (bool) $settings['validate_aws_ip'] : true;
+	}
+
+	/**
+	 * Check if message is an SNS message (has Signature field)
+	 *
+	 * @param array $data Message data
+	 * @return bool True if SNS message
+	 */
+	private function is_sns_message( $data ) {
+		return isset( $data['Type'] ) && isset( $data['Signature'] );
 	}
 }
