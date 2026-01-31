@@ -31,9 +31,6 @@ class Plugin {
 		if ( is_admin() ) {
 			add_action( 'admin_menu', array( $this, 'admin_menu' ) );
 			add_action( 'admin_init', array( $this, 'register_settings' ) );
-			
-			// Initialize AJAX handlers
-			AJAX_Handler::init();
 		}
 
 		// Tracking endpoints (open pixel, click tracking, unsubscribe)
@@ -50,7 +47,7 @@ class Plugin {
 	}
 
 	/**
-	 * Register REST API routes for SNS notifications
+	 * Register REST API routes
 	 */
 	public function register_rest_routes() {
 		$settings = get_option( 'sessypress_settings', array() );
@@ -62,10 +59,64 @@ class Plugin {
 		
 		$slug = isset( $settings['sns_endpoint_slug'] ) ? $settings['sns_endpoint_slug'] : 'ses-sns-webhook';
 
+		// SNS Webhook endpoint (public, secret key protected)
 		register_rest_route( 'sessypress/v1', '/' . $slug, array(
 			'methods'             => 'POST',
 			'callback'            => array( $this, 'handle_sns_notification' ),
-			'permission_callback' => '__return_true', // SNS validates via secret
+			'permission_callback' => '__return_true', // SNS validates via secret key
+		) );
+
+		// Admin API endpoints (requires authentication + manage_options capability)
+		register_rest_route( 'sessypress/v1', '/stats', array(
+			'methods'             => 'GET',
+			'callback'            => array( $this, 'get_stats' ),
+			'permission_callback' => function() {
+				return current_user_can( 'manage_options' );
+			},
+		) );
+
+		register_rest_route( 'sessypress/v1', '/events', array(
+			'methods'             => 'GET',
+			'callback'            => array( $this, 'get_events' ),
+			'permission_callback' => function() {
+				return current_user_can( 'manage_options' );
+			},
+			'args'                => array(
+				'event_type'   => array(
+					'required'          => false,
+					'sanitize_callback' => 'sanitize_text_field',
+				),
+				'event_source' => array(
+					'required'          => false,
+					'sanitize_callback' => 'sanitize_text_field',
+				),
+				'recipient'    => array(
+					'required'          => false,
+					'sanitize_callback' => 'sanitize_email',
+				),
+				'message_id'   => array(
+					'required'          => false,
+					'sanitize_callback' => 'sanitize_text_field',
+				),
+				'date_from'    => array(
+					'required'          => false,
+					'sanitize_callback' => 'sanitize_text_field',
+				),
+				'date_to'      => array(
+					'required'          => false,
+					'sanitize_callback' => 'sanitize_text_field',
+				),
+				'limit'        => array(
+					'required'          => false,
+					'default'           => 50,
+					'sanitize_callback' => 'absint',
+				),
+				'offset'       => array(
+					'required'          => false,
+					'default'           => 0,
+					'sanitize_callback' => 'absint',
+				),
+			),
 		) );
 	}
 
@@ -455,5 +506,176 @@ class Plugin {
 			<?php esc_html_e( 'Automatically delete tracking data older than this many days. Set to 0 to keep data forever.', 'sessypress' ); ?>
 		</p>
 		<?php
+	}
+
+	/**
+	 * REST API: Get stats
+	 *
+	 * @param \WP_REST_Request $request Request object.
+	 * @return \WP_REST_Response
+	 */
+	public function get_stats( $request ) {
+		global $wpdb;
+
+		$date_from = $request->get_param( 'date_from' ) ?: gmdate( 'Y-m-d', strtotime( '-30 days' ) );
+		$date_to   = $request->get_param( 'date_to' ) ?: gmdate( 'Y-m-d' );
+
+		// Cache key based on date range
+		$cache_key = 'sessypress_stats_' . md5( $date_from . $date_to );
+		$cached    = get_transient( $cache_key );
+
+		if ( false !== $cached ) {
+			return rest_ensure_response( $cached );
+		}
+
+		$events_table   = $wpdb->prefix . 'ses_email_events';
+		$date_range_sql = $wpdb->prepare( ' AND DATE(timestamp) BETWEEN %s AND %s', $date_from, $date_to );
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$event_counts = $wpdb->get_results(
+			"SELECT event_type, event_source, COUNT(*) as count 
+			FROM $events_table 
+			WHERE 1=1 $date_range_sql
+			GROUP BY event_type, event_source",
+			ARRAY_A
+		);
+
+		$stats = array(
+			'total_sent'             => 0,
+			'total_delivered'        => 0,
+			'total_rejected'         => 0,
+			'total_bounced'          => 0,
+			'total_complaints'       => 0,
+			'total_opens'            => 0,
+			'total_clicks'           => 0,
+			'delivery_delays'        => 0,
+			'rendering_failures'     => 0,
+			'subscription_events'    => 0,
+			'sns_events'             => 0,
+			'event_publishing_count' => 0,
+			'manual_events'          => 0,
+		);
+
+		foreach ( $event_counts as $row ) {
+			$event_type = strtolower( $row['event_type'] );
+			$source     = $row['event_source'];
+			$count      = (int) $row['count'];
+
+			// Count by source
+			if ( 'sns_notification' === $source ) {
+				$stats['sns_events'] += $count;
+			} elseif ( 'event_publishing' === $source ) {
+				$stats['event_publishing_count'] += $count;
+			} elseif ( 'manual' === $source ) {
+				$stats['manual_events'] += $count;
+			}
+
+			// Count by type
+			switch ( $event_type ) {
+				case 'send':
+					$stats['total_sent'] += $count;
+					break;
+				case 'delivery':
+					$stats['total_delivered'] += $count;
+					break;
+				case 'reject':
+					$stats['total_rejected'] += $count;
+					break;
+				case 'bounce':
+					$stats['total_bounced'] += $count;
+					break;
+				case 'complaint':
+					$stats['total_complaints'] += $count;
+					break;
+				case 'open':
+					$stats['total_opens'] += $count;
+					break;
+				case 'click':
+					$stats['total_clicks'] += $count;
+					break;
+				case 'deliverydelay':
+					$stats['delivery_delays'] += $count;
+					break;
+				case 'renderingfailure':
+					$stats['rendering_failures'] += $count;
+					break;
+				case 'subscription':
+					$stats['subscription_events'] += $count;
+					break;
+			}
+		}
+
+		// Cache for 5 minutes
+		set_transient( $cache_key, $stats, 5 * MINUTE_IN_SECONDS );
+
+		return rest_ensure_response( $stats );
+	}
+
+	/**
+	 * REST API: Get events (paginated, filtered)
+	 *
+	 * @param \WP_REST_Request $request Request object.
+	 * @return \WP_REST_Response
+	 */
+	public function get_events( $request ) {
+		global $wpdb;
+
+		$events_table = $wpdb->prefix . 'ses_email_events';
+
+		// Get parameters with defaults
+		$event_type   = $request->get_param( 'event_type' ) ?: '';
+		$event_source = $request->get_param( 'event_source' ) ?: '';
+		$recipient    = $request->get_param( 'recipient' ) ?: '';
+		$message_id   = $request->get_param( 'message_id' ) ?: '';
+		$date_from    = $request->get_param( 'date_from' ) ?: gmdate( 'Y-m-d', strtotime( '-30 days' ) );
+		$date_to      = $request->get_param( 'date_to' ) ?: gmdate( 'Y-m-d' );
+		$limit        = $request->get_param( 'limit' ) ?: 50;
+		$offset       = $request->get_param( 'offset' ) ?: 0;
+
+		// Build WHERE clauses
+		$where = array( '1=1' );
+		$where[] = $wpdb->prepare( 'DATE(timestamp) BETWEEN %s AND %s', $date_from, $date_to );
+
+		if ( ! empty( $event_type ) ) {
+			$where[] = $wpdb->prepare( 'event_type = %s', $event_type );
+		}
+
+		if ( ! empty( $event_source ) ) {
+			$where[] = $wpdb->prepare( 'event_source = %s', $event_source );
+		}
+
+		if ( ! empty( $recipient ) ) {
+			$where[] = $wpdb->prepare( 'recipient = %s', $recipient );
+		}
+
+		if ( ! empty( $message_id ) ) {
+			$where[] = $wpdb->prepare( 'message_id = %s', $message_id );
+		}
+
+		$where_sql = implode( ' AND ', $where );
+
+		// Get total count
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$total = $wpdb->get_var( "SELECT COUNT(*) FROM $events_table WHERE $where_sql" );
+
+		// Get events
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$events = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM $events_table WHERE $where_sql ORDER BY timestamp DESC LIMIT %d OFFSET %d",
+				$limit,
+				$offset
+			),
+			ARRAY_A
+		);
+
+		return rest_ensure_response(
+			array(
+				'events' => $events,
+				'total'  => (int) $total,
+				'limit'  => (int) $limit,
+				'offset' => (int) $offset,
+			)
+		);
 	}
 }
