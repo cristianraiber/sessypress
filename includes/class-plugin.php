@@ -153,6 +153,14 @@ class Plugin {
 	 * Render admin dashboard
 	 */
 	public function admin_dashboard() {
+		// Load WP_List_Table if not already loaded.
+		if ( ! class_exists( 'WP_List_Table' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/class-wp-list-table.php';
+		}
+		
+		// Load our custom Events_List_Table.
+		require_once SESSYPRESS_PATH . 'includes/admin/class-events-list-table.php';
+		
 		require_once SESSYPRESS_PATH . 'includes/admin/dashboard.php';
 	}
 
@@ -164,46 +172,72 @@ class Plugin {
 	}
 
 	/**
-	 * Register settings
+	 * Register settings using WordPress Settings API
 	 */
 	public function register_settings() {
+		// Register setting.
 		register_setting(
-			'ses_sns_tracker_settings_group',
-			'ses_sns_tracker_settings',
+			'sessypress_settings_group',
+			'sessypress_settings',
 			array(
 				'sanitize_callback' => array( $this, 'sanitize_settings' ),
 			)
 		);
 
+		// SNS Configuration Section.
 		add_settings_section(
-			'ses_sns_tracker_general',
-			__( 'General Settings', 'ses-sns-tracker' ),
-			null,
-			'ses-sns-tracker-settings'
+			'sessypress_sns_section',
+			__( 'SNS Endpoint Configuration', 'sessypress' ),
+			array( $this, 'render_sns_section_callback' ),
+			'sessypress-settings'
 		);
 
 		add_settings_field(
 			'sns_secret_key',
-			__( 'SNS Secret Key', 'ses-sns-tracker' ),
+			__( 'SNS Secret Key', 'sessypress' ),
 			array( $this, 'render_secret_key_field' ),
-			'ses-sns-tracker-settings',
-			'ses_sns_tracker_general'
+			'sessypress-settings',
+			'sessypress_sns_section'
 		);
 
 		add_settings_field(
-			'track_opens',
-			__( 'Track Email Opens', 'ses-sns-tracker' ),
-			array( $this, 'render_track_opens_field' ),
-			'ses-sns-tracker-settings',
-			'ses_sns_tracker_general'
+			'sns_endpoint_slug',
+			__( 'Endpoint Slug', 'sessypress' ),
+			array( $this, 'render_endpoint_slug_field' ),
+			'sessypress-settings',
+			'sessypress_sns_section'
+		);
+
+		// Tracking Settings Section.
+		add_settings_section(
+			'sessypress_tracking_section',
+			__( 'Email Tracking Settings', 'sessypress' ),
+			array( $this, 'render_tracking_section_callback' ),
+			'sessypress-settings'
 		);
 
 		add_settings_field(
-			'track_clicks',
-			__( 'Track Link Clicks', 'ses-sns-tracker' ),
-			array( $this, 'render_track_clicks_field' ),
-			'ses-sns-tracker-settings',
-			'ses_sns_tracker_general'
+			'enable_manual_tracking',
+			__( 'Manual Tracking', 'sessypress' ),
+			array( $this, 'render_manual_tracking_field' ),
+			'sessypress-settings',
+			'sessypress_tracking_section'
+		);
+
+		add_settings_field(
+			'tracking_features',
+			__( 'Tracking Features', 'sessypress' ),
+			array( $this, 'render_tracking_features_field' ),
+			'sessypress-settings',
+			'sessypress_tracking_section'
+		);
+
+		add_settings_field(
+			'retention_days',
+			__( 'Data Retention', 'sessypress' ),
+			array( $this, 'render_retention_field' ),
+			'sessypress-settings',
+			'sessypress_tracking_section'
 		);
 	}
 
@@ -269,36 +303,157 @@ class Plugin {
 	}
 
 	/**
-	 * Render settings fields
+	 * Render settings fields using WordPress form helpers
 	 */
 	public function render_secret_key_field() {
-		$settings = get_option( 'ses_sns_tracker_settings', array() );
-		$value    = isset( $settings['sns_secret_key'] ) ? $settings['sns_secret_key'] : '';
+		$settings = get_option( 'sessypress_settings', array() );
+		$value    = $settings['sns_secret_key'] ?? wp_generate_password( 32, false );
 		?>
-		<input type="text" name="ses_sns_tracker_settings[sns_secret_key]" value="<?php echo esc_attr( $value ); ?>" class="regular-text" readonly />
-		<p class="description"><?php esc_html_e( 'Use this key to validate SNS requests. Add it to your SNS subscription URL as ?key=YOUR_KEY', 'ses-sns-tracker' ); ?></p>
+		<input 
+			type="text" 
+			name="sessypress_settings[sns_secret_key]" 
+			value="<?php echo esc_attr( $value ); ?>" 
+			class="regular-text code" 
+			readonly 
+			onclick="this.select();" 
+		/>
+		<p class="description">
+			<?php esc_html_e( 'This secret key validates SNS requests. Click to select and copy. Do not share publicly.', 'sessypress' ); ?>
+		</p>
 		<?php
 	}
 
 	public function render_track_opens_field() {
-		$settings = get_option( 'ses_sns_tracker_settings', array() );
+		$settings = get_option( 'sessypress_settings', array() );
 		$checked  = isset( $settings['track_opens'] ) && '1' === $settings['track_opens'];
 		?>
 		<label>
-			<input type="checkbox" name="ses_sns_tracker_settings[track_opens]" value="1" <?php checked( $checked ); ?> />
-			<?php esc_html_e( 'Enable email open tracking (1x1 pixel)', 'ses-sns-tracker' ); ?>
+			<input type="checkbox" name="sessypress_settings[track_opens]" value="1" <?php checked( $checked ); ?> />
+			<?php esc_html_e( 'Enable email open tracking (1x1 pixel)', 'sessypress' ); ?>
 		</label>
 		<?php
 	}
 
 	public function render_track_clicks_field() {
-		$settings = get_option( 'ses_sns_tracker_settings', array() );
+		$settings = get_option( 'sessypress_settings', array() );
 		$checked  = isset( $settings['track_clicks'] ) && '1' === $settings['track_clicks'];
 		?>
 		<label>
-			<input type="checkbox" name="ses_sns_tracker_settings[track_clicks]" value="1" <?php checked( $checked ); ?> />
-			<?php esc_html_e( 'Enable link click tracking (URL rewrites)', 'ses-sns-tracker' ); ?>
+			<input type="checkbox" name="sessypress_settings[track_clicks]" value="1" <?php checked( $checked ); ?> />
+			<?php esc_html_e( 'Enable link click tracking (URL rewrites)', 'sessypress' ); ?>
 		</label>
+		<?php
+	}
+
+	/**
+	 * Section callbacks using WordPress admin UI
+	 */
+	public function render_sns_section_callback() {
+		echo '<p>' . esc_html__( 'Configure your SNS webhook endpoint for receiving SES notifications.', 'sessypress' ) . '</p>';
+	}
+
+	public function render_tracking_section_callback() {
+		echo '<p>' . esc_html__( 'Configure email tracking features and data retention.', 'sessypress' ) . '</p>';
+	}
+
+	public function render_endpoint_slug_field() {
+		$settings = get_option( 'sessypress_settings', array() );
+		$value    = $settings['sns_endpoint_slug'] ?? 'ses-sns-webhook';
+		?>
+		<input 
+			type="text" 
+			name="sessypress_settings[sns_endpoint_slug]" 
+			value="<?php echo esc_attr( $value ); ?>" 
+			class="regular-text" 
+			pattern="[a-z0-9\-]+" 
+		/>
+		<p class="description">
+			<?php esc_html_e( 'Custom slug for the SNS webhook endpoint. Use lowercase letters, numbers, and hyphens only.', 'sessypress' ); ?>
+		</p>
+		<?php
+		$endpoint_url = rest_url( 'sessypress/v1/' . $value );
+		?>
+		<p>
+			<strong><?php esc_html_e( 'Full Endpoint URL:', 'sessypress' ); ?></strong><br>
+			<input 
+				type="text" 
+				readonly 
+				class="large-text code" 
+				value="<?php echo esc_attr( $endpoint_url . '?key=' . ( $settings['sns_secret_key'] ?? '' ) ); ?>" 
+				onclick="this.select();" 
+			/>
+		</p>
+		<?php
+	}
+
+	public function render_manual_tracking_field() {
+		$settings = get_option( 'sessypress_settings', array() );
+		$checked  = isset( $settings['enable_manual_tracking'] ) && '1' === $settings['enable_manual_tracking'];
+		?>
+		<fieldset>
+			<label>
+				<input 
+					type="checkbox" 
+					name="sessypress_settings[enable_manual_tracking]" 
+					value="1" 
+					<?php checked( $checked ); ?> 
+				/>
+				<?php esc_html_e( 'Enable manual tracking injection', 'sessypress' ); ?>
+			</label>
+			<p class="description">
+				<?php esc_html_e( 'Automatically inject tracking pixels and rewrite links in outgoing emails. Disable this if you\'re using SES Configuration Sets with Event Publishing.', 'sessypress' ); ?>
+			</p>
+		</fieldset>
+		<?php
+	}
+
+	public function render_tracking_features_field() {
+		$settings = get_option( 'sessypress_settings', array() );
+		$track_opens  = isset( $settings['track_opens'] ) && '1' === $settings['track_opens'];
+		$track_clicks = isset( $settings['track_clicks'] ) && '1' === $settings['track_clicks'];
+		?>
+		<fieldset>
+			<label>
+				<input 
+					type="checkbox" 
+					name="sessypress_settings[track_opens]" 
+					value="1" 
+					<?php checked( $track_opens ); ?> 
+				/>
+				<?php esc_html_e( 'Track email opens (1x1 pixel)', 'sessypress' ); ?>
+			</label>
+			<br><br>
+			<label>
+				<input 
+					type="checkbox" 
+					name="sessypress_settings[track_clicks]" 
+					value="1" 
+					<?php checked( $track_clicks ); ?> 
+				/>
+				<?php esc_html_e( 'Track link clicks (URL rewrites)', 'sessypress' ); ?>
+			</label>
+			<p class="description">
+				<?php esc_html_e( 'These options only apply when manual tracking is enabled. Event Publishing tracks opens/clicks automatically.', 'sessypress' ); ?>
+			</p>
+		</fieldset>
+		<?php
+	}
+
+	public function render_retention_field() {
+		$settings = get_option( 'sessypress_settings', array() );
+		$value    = $settings['retention_days'] ?? 90;
+		?>
+		<input 
+			type="number" 
+			name="sessypress_settings[retention_days]" 
+			value="<?php echo esc_attr( $value ); ?>" 
+			class="small-text" 
+			min="0" 
+		/> 
+		<?php esc_html_e( 'days', 'sessypress' ); ?>
+		<p class="description">
+			<?php esc_html_e( 'Automatically delete tracking data older than this many days. Set to 0 to keep data forever.', 'sessypress' ); ?>
+		</p>
 		<?php
 	}
 }
