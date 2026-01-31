@@ -3,7 +3,7 @@
  * Main plugin class
  */
 
-namespace SES_SNS_Tracker;
+namespace SESSYPress;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -44,10 +44,16 @@ class Plugin {
 	 * Register REST API routes for SNS notifications
 	 */
 	public function register_rest_routes() {
-		$settings = get_option( 'ses_sns_tracker_settings', array() );
-		$slug     = isset( $settings['sns_endpoint_slug'] ) ? $settings['sns_endpoint_slug'] : 'ses-sns-webhook';
+		$settings = get_option( 'sessypress_settings', array() );
+		
+		// Fallback to old option name for backwards compatibility
+		if ( empty( $settings ) ) {
+			$settings = get_option( 'ses_sns_tracker_settings', array() );
+		}
+		
+		$slug = isset( $settings['sns_endpoint_slug'] ) ? $settings['sns_endpoint_slug'] : 'ses-sns-webhook';
 
-		register_rest_route( 'ses-sns-tracker/v1', '/' . $slug, array(
+		register_rest_route( 'sessypress/v1', '/' . $slug, array(
 			'methods'             => 'POST',
 			'callback'            => array( $this, 'handle_sns_notification' ),
 			'permission_callback' => '__return_true', // SNS validates via secret
@@ -119,14 +125,14 @@ class Plugin {
 	 * Render admin dashboard
 	 */
 	public function admin_dashboard() {
-		require_once SES_SNS_TRACKER_PATH . 'includes/admin/dashboard.php';
+		require_once SESSYPRESS_PATH . 'includes/admin/dashboard.php';
 	}
 
 	/**
 	 * Render admin settings
 	 */
 	public function admin_settings() {
-		require_once SES_SNS_TRACKER_PATH . 'includes/admin/settings.php';
+		require_once SESSYPRESS_PATH . 'includes/admin/settings.php';
 	}
 
 	/**

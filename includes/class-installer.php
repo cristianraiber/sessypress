@@ -3,7 +3,7 @@
  * Installation and database schema
  */
 
-namespace SES_SNS_Tracker;
+namespace SESSYPress;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -15,6 +15,7 @@ class Installer {
 	public static function activate() {
 		self::create_tables();
 		self::create_options();
+		self::maybe_migrate_database();
 
 		// Flush rewrite rules
 		flush_rewrite_rules();
@@ -44,6 +45,7 @@ class Installer {
 			message_id varchar(255) NOT NULL,
 			notification_type varchar(50) NOT NULL,
 			event_type varchar(50) NOT NULL,
+			event_source varchar(50) DEFAULT 'sns_notification',
 			recipient varchar(255) NOT NULL,
 			sender varchar(255) NOT NULL,
 			subject varchar(500) DEFAULT NULL,
@@ -52,6 +54,7 @@ class Installer {
 			complaint_type varchar(50) DEFAULT NULL,
 			diagnostic_code text DEFAULT NULL,
 			smtp_response text DEFAULT NULL,
+			event_metadata longtext DEFAULT NULL,
 			timestamp datetime NOT NULL,
 			raw_payload longtext DEFAULT NULL,
 			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -59,6 +62,7 @@ class Installer {
 			KEY message_id (message_id),
 			KEY notification_type (notification_type),
 			KEY event_type (event_type),
+			KEY event_source (event_source),
 			KEY recipient (recipient),
 			KEY timestamp (timestamp)
 		) $charset_collate;";
@@ -94,14 +98,66 @@ class Installer {
 	 * Create default options
 	 */
 	private static function create_options() {
-		$defaults = array(
-			'sns_secret_key'     => wp_generate_password( 32, false ),
-			'track_opens'        => '1',
-			'track_clicks'       => '1',
-			'sns_endpoint_slug'  => 'ses-sns-webhook',
-			'retention_days'     => 90,
-		);
+		// Check if old settings exist
+		$old_settings = get_option( 'ses_sns_tracker_settings' );
+		
+		if ( $old_settings ) {
+			// Migrate old settings to new option name
+			update_option( 'sessypress_settings', $old_settings );
+		} else {
+			// Create new settings
+			$defaults = array(
+				'sns_secret_key'     => wp_generate_password( 32, false ),
+				'track_opens'        => '1',
+				'track_clicks'       => '1',
+				'sns_endpoint_slug'  => 'ses-sns-webhook',
+				'retention_days'     => 90,
+			);
 
-		add_option( 'ses_sns_tracker_settings', $defaults );
+			add_option( 'sessypress_settings', $defaults );
+		}
+	}
+
+	/**
+	 * Migrate database schema if needed
+	 */
+	private static function maybe_migrate_database() {
+		$current_version = get_option( 'ses_sns_tracker_db_version', '0.0.0' );
+		$target_version  = '1.1.0';
+
+		if ( version_compare( $current_version, $target_version, '<' ) ) {
+			self::migrate_to_1_1_0();
+			update_option( 'ses_sns_tracker_db_version', $target_version );
+		}
+	}
+
+	/**
+	 * Migrate to version 1.1.0
+	 * Add event_source and event_metadata columns
+	 */
+	private static function migrate_to_1_1_0() {
+		global $wpdb;
+
+		$table = $wpdb->prefix . 'ses_email_events';
+
+		// Check if columns already exist
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$columns = $wpdb->get_col( "DESCRIBE $table" );
+
+		if ( ! in_array( 'event_source', $columns, true ) ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange
+			$wpdb->query( "ALTER TABLE $table ADD COLUMN event_source VARCHAR(50) DEFAULT 'sns_notification' AFTER event_type" );
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange
+			$wpdb->query( "ALTER TABLE $table ADD INDEX idx_event_source (event_source)" );
+
+			// Set event_source for existing records
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$wpdb->query( "UPDATE $table SET event_source = 'sns_notification' WHERE event_source IS NULL" );
+		}
+
+		if ( ! in_array( 'event_metadata', $columns, true ) ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange
+			$wpdb->query( "ALTER TABLE $table ADD COLUMN event_metadata LONGTEXT DEFAULT NULL AFTER smtp_response" );
+		}
 	}
 }

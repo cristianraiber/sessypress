@@ -1,16 +1,49 @@
 <?php
 /**
- * Handle SNS notifications
+ * SNS Handler - Router for SNS messages (Notification vs Event Publishing)
  */
 
-namespace SES_SNS_Tracker;
+namespace SESSYPress;
 
 defined( 'ABSPATH' ) || exit;
 
 class SNS_Handler {
 
 	/**
-	 * Process SNS notification
+	 * Event detector instance
+	 *
+	 * @var Event_Detector
+	 */
+	private $detector;
+
+	/**
+	 * SNS Notification handler instance
+	 *
+	 * @var SNS_Notification_Handler
+	 */
+	private $sns_notification_handler;
+
+	/**
+	 * Event Publishing handler instance
+	 *
+	 * @var Event_Publishing_Handler
+	 */
+	private $event_publishing_handler;
+
+	/**
+	 * Constructor
+	 */
+	public function __construct() {
+		$this->detector                   = new Event_Detector();
+		$this->sns_notification_handler   = new SNS_Notification_Handler();
+		$this->event_publishing_handler   = new Event_Publishing_Handler();
+	}
+
+	/**
+	 * Process SNS webhook request
+	 *
+	 * @param \WP_REST_Request $request REST request object
+	 * @return \WP_REST_Response|\WP_Error
 	 */
 	public function process( $request ) {
 		// Validate secret key
@@ -25,13 +58,21 @@ class SNS_Handler {
 			return new \WP_Error( 'invalid_json', 'Invalid JSON payload', array( 'status' => 400 ) );
 		}
 
+		// Detect message type
+		$message_type = $this->detector->detect_message_type( $data );
+
 		// Handle SNS subscription confirmation
-		if ( isset( $data['Type'] ) && 'SubscriptionConfirmation' === $data['Type'] ) {
+		if ( 'subscription_confirmation' === $message_type ) {
 			return $this->confirm_subscription( $data );
 		}
 
+		// Handle SNS unsubscribe confirmation
+		if ( 'unsubscribe_confirmation' === $message_type ) {
+			return rest_ensure_response( array( 'message' => 'Unsubscribe confirmed' ) );
+		}
+
 		// Handle SNS notification
-		if ( isset( $data['Type'] ) && 'Notification' === $data['Type'] ) {
+		if ( 'notification' === $message_type ) {
 			return $this->handle_notification( $data );
 		}
 
@@ -40,10 +81,19 @@ class SNS_Handler {
 
 	/**
 	 * Validate secret key
+	 *
+	 * @param \WP_REST_Request $request REST request object
+	 * @return bool
 	 */
 	private function validate_secret( $request ) {
-		$settings = get_option( 'ses_sns_tracker_settings', array() );
+		$settings = get_option( 'sessypress_settings', array() );
 		$secret   = isset( $settings['sns_secret_key'] ) ? $settings['sns_secret_key'] : '';
+
+		// Fallback to old option name for backwards compatibility
+		if ( empty( $secret ) ) {
+			$old_settings = get_option( 'ses_sns_tracker_settings', array() );
+			$secret       = isset( $old_settings['sns_secret_key'] ) ? $old_settings['sns_secret_key'] : '';
+		}
 
 		$provided = $request->get_param( 'key' );
 
@@ -52,6 +102,9 @@ class SNS_Handler {
 
 	/**
 	 * Confirm SNS subscription
+	 *
+	 * @param array $data SNS subscription confirmation data
+	 * @return \WP_REST_Response|\WP_Error
 	 */
 	private function confirm_subscription( $data ) {
 		if ( ! isset( $data['SubscribeURL'] ) ) {
@@ -66,166 +119,39 @@ class SNS_Handler {
 		}
 
 		// Log subscription confirmation
-		error_log( 'SES SNS Tracker: Subscription confirmed for topic: ' . ( $data['TopicArn'] ?? 'unknown' ) );
+		error_log( 'SESSYPress: SNS Subscription confirmed for topic: ' . ( $data['TopicArn'] ?? 'unknown' ) );
 
 		return rest_ensure_response( array( 'message' => 'Subscription confirmed' ) );
 	}
 
 	/**
 	 * Handle SNS notification
+	 *
+	 * @param array $data SNS notification data
+	 * @return \WP_REST_Response|\WP_Error
 	 */
 	private function handle_notification( $data ) {
 		if ( ! isset( $data['Message'] ) ) {
 			return new \WP_Error( 'missing_message', 'Missing Message field', array( 'status' => 400 ) );
 		}
 
-		$message = json_decode( $data['Message'], true );
+		$message = $this->detector->parse_notification( $data );
 
 		if ( ! $message ) {
 			return new \WP_Error( 'invalid_message', 'Invalid Message JSON', array( 'status' => 400 ) );
 		}
 
-		// Store the event
-		$this->store_event( $message );
-
-		return rest_ensure_response( array( 'message' => 'Notification processed' ) );
-	}
-
-	/**
-	 * Store event in database
-	 */
-	private function store_event( $message ) {
-		global $wpdb;
-
-		$table = $wpdb->prefix . 'ses_email_events';
-
-		$notification_type = isset( $message['notificationType'] ) ? $message['notificationType'] : '';
-		$mail              = isset( $message['mail'] ) ? $message['mail'] : array();
-		$message_id        = isset( $mail['messageId'] ) ? $mail['messageId'] : '';
-		$source            = isset( $mail['source'] ) ? $mail['source'] : '';
-		$destination       = isset( $mail['destination'] ) ? $mail['destination'] : array();
-		$timestamp         = isset( $mail['timestamp'] ) ? $mail['timestamp'] : current_time( 'mysql' );
-
-		// Parse subject from headers if available
-		$subject = '';
-		if ( isset( $mail['commonHeaders']['subject'] ) ) {
-			$subject = $mail['commonHeaders']['subject'];
+		// Route to appropriate handler
+		if ( $this->detector->is_sns_notification( $message ) ) {
+			$this->sns_notification_handler->handle_event( $message );
+			return rest_ensure_response( array( 'message' => 'SNS Notification processed' ) );
 		}
 
-		// Process based on notification type
-		switch ( $notification_type ) {
-			case 'Bounce':
-				$this->store_bounce( $message_id, $message, $source, $destination, $subject, $timestamp );
-				break;
-
-			case 'Complaint':
-				$this->store_complaint( $message_id, $message, $source, $destination, $subject, $timestamp );
-				break;
-
-			case 'Delivery':
-				$this->store_delivery( $message_id, $message, $source, $destination, $subject, $timestamp );
-				break;
+		if ( $this->detector->is_event_publishing( $message ) ) {
+			$this->event_publishing_handler->handle_event( $message );
+			return rest_ensure_response( array( 'message' => 'Event Publishing message processed' ) );
 		}
-	}
 
-	/**
-	 * Store bounce event
-	 */
-	private function store_bounce( $message_id, $message, $source, $destination, $subject, $timestamp ) {
-		global $wpdb;
-
-		$table  = $wpdb->prefix . 'ses_email_events';
-		$bounce = isset( $message['bounce'] ) ? $message['bounce'] : array();
-
-		$bounce_type     = isset( $bounce['bounceType'] ) ? $bounce['bounceType'] : '';
-		$bounce_subtype  = isset( $bounce['bounceSubType'] ) ? $bounce['bounceSubType'] : '';
-		$bounced_recips  = isset( $bounce['bouncedRecipients'] ) ? $bounce['bouncedRecipients'] : array();
-
-		foreach ( $bounced_recips as $recipient ) {
-			$email           = isset( $recipient['emailAddress'] ) ? $recipient['emailAddress'] : '';
-			$diagnostic_code = isset( $recipient['diagnosticCode'] ) ? $recipient['diagnosticCode'] : '';
-
-			$wpdb->insert(
-				$table,
-				array(
-					'message_id'        => $message_id,
-					'notification_type' => 'Bounce',
-					'event_type'        => 'bounce',
-					'recipient'         => $email,
-					'sender'            => $source,
-					'subject'           => $subject,
-					'bounce_type'       => $bounce_type,
-					'bounce_subtype'    => $bounce_subtype,
-					'diagnostic_code'   => $diagnostic_code,
-					'timestamp'         => gmdate( 'Y-m-d H:i:s', strtotime( $timestamp ) ),
-					'raw_payload'       => wp_json_encode( $message ),
-				),
-				array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
-			);
-		}
-	}
-
-	/**
-	 * Store complaint event
-	 */
-	private function store_complaint( $message_id, $message, $source, $destination, $subject, $timestamp ) {
-		global $wpdb;
-
-		$table     = $wpdb->prefix . 'ses_email_events';
-		$complaint = isset( $message['complaint'] ) ? $message['complaint'] : array();
-
-		$complaint_type       = isset( $complaint['complaintFeedbackType'] ) ? $complaint['complaintFeedbackType'] : '';
-		$complained_recips    = isset( $complaint['complainedRecipients'] ) ? $complaint['complainedRecipients'] : array();
-
-		foreach ( $complained_recips as $recipient ) {
-			$email = isset( $recipient['emailAddress'] ) ? $recipient['emailAddress'] : '';
-
-			$wpdb->insert(
-				$table,
-				array(
-					'message_id'        => $message_id,
-					'notification_type' => 'Complaint',
-					'event_type'        => 'complaint',
-					'recipient'         => $email,
-					'sender'            => $source,
-					'subject'           => $subject,
-					'complaint_type'    => $complaint_type,
-					'timestamp'         => gmdate( 'Y-m-d H:i:s', strtotime( $timestamp ) ),
-					'raw_payload'       => wp_json_encode( $message ),
-				),
-				array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
-			);
-		}
-	}
-
-	/**
-	 * Store delivery event
-	 */
-	private function store_delivery( $message_id, $message, $source, $destination, $subject, $timestamp ) {
-		global $wpdb;
-
-		$table    = $wpdb->prefix . 'ses_email_events';
-		$delivery = isset( $message['delivery'] ) ? $message['delivery'] : array();
-
-		$smtp_response = isset( $delivery['smtpResponse'] ) ? $delivery['smtpResponse'] : '';
-		$recipients    = isset( $delivery['recipients'] ) ? $delivery['recipients'] : $destination;
-
-		foreach ( $recipients as $email ) {
-			$wpdb->insert(
-				$table,
-				array(
-					'message_id'        => $message_id,
-					'notification_type' => 'Delivery',
-					'event_type'        => 'delivery',
-					'recipient'         => $email,
-					'sender'            => $source,
-					'subject'           => $subject,
-					'smtp_response'     => $smtp_response,
-					'timestamp'         => gmdate( 'Y-m-d H:i:s', strtotime( $timestamp ) ),
-					'raw_payload'       => wp_json_encode( $message ),
-				),
-				array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
-			);
-		}
+		return new \WP_Error( 'unknown_message_format', 'Unknown message format', array( 'status' => 400 ) );
 	}
 }
