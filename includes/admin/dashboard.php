@@ -22,17 +22,24 @@ $event_source_filter = isset( $_GET['event_source'] ) ? sanitize_text_field( wp_
 $date_from           = isset( $_GET['date_from'] ) ? sanitize_text_field( wp_unslash( $_GET['date_from'] ) ) : gmdate( 'Y-m-d', strtotime( '-30 days' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 $date_to             = isset( $_GET['date_to'] ) ? sanitize_text_field( wp_unslash( $_GET['date_to'] ) ) : gmdate( 'Y-m-d' ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 
-// Build WHERE clause for event_source filter.
-$where_source = '';
-if ( 'sns' === $event_source_filter ) {
-	$where_source = " AND event_source = 'sns_notification'";
-} elseif ( 'event_publishing' === $event_source_filter ) {
-	$where_source = " AND event_source = 'event_publishing'";
-} elseif ( 'manual' === $event_source_filter ) {
-	$where_source = " AND event_source = 'manual'";
+// Build WHERE clauses using proper prepared statements.
+$where_clauses = array( '1=1' );
+$where_clauses[] = $wpdb->prepare( 'DATE(timestamp) BETWEEN %s AND %s', $date_from, $date_to );
+
+// Add event_source filter using prepared statement.
+if ( 'all' !== $event_source_filter ) {
+	$source_map = array(
+		'sns'              => 'sns_notification',
+		'event_publishing' => 'event_publishing',
+		'manual'           => 'manual',
+	);
+	
+	if ( isset( $source_map[ $event_source_filter ] ) ) {
+		$where_clauses[] = $wpdb->prepare( 'event_source = %s', $source_map[ $event_source_filter ] );
+	}
 }
 
-$date_range_sql = $wpdb->prepare( ' AND DATE(timestamp) BETWEEN %s AND %s', $date_from, $date_to );
+$where_sql = implode( ' AND ', $where_clauses );
 
 // Get comprehensive stats.
 $stats = array(
@@ -52,11 +59,11 @@ $stats = array(
 );
 
 // Count by event types.
-// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 $event_counts = $wpdb->get_results(
 	"SELECT event_type, event_source, COUNT(*) as count 
 	FROM $events_table 
-	WHERE 1=1 $date_range_sql $where_source
+	WHERE $where_sql
 	GROUP BY event_type, event_source",
 	ARRAY_A
 );

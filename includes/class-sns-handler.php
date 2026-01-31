@@ -95,9 +95,9 @@ class SNS_Handler {
 			$secret       = isset( $old_settings['sns_secret_key'] ) ? $old_settings['sns_secret_key'] : '';
 		}
 
-		$provided = $request->get_param( 'key' );
+		$provided = sanitize_text_field( (string) $request->get_param( 'key' ) );
 
-		return hash_equals( $secret, (string) $provided );
+		return hash_equals( $secret, $provided );
 	}
 
 	/**
