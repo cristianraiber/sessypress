@@ -1,0 +1,12 @@
+{
+  "Type": "Notification",
+  "MessageId": "88h46h58-1jkl-0i8i-4l5j-5il3i6h3hl980",
+  "TopicArn": "arn:aws:sns:us-east-1:123456789012:ses-event-publishing",
+  "Subject": "Amazon SES Event Notification",
+  "Message": "{\"eventType\":\"Open\",\"mail\":{\"timestamp\":\"2026-01-31T16:00:00.000Z\",\"source\":\"sender@example.com\",\"sourceArn\":\"arn:aws:ses:us-east-1:123456789012:identity/example.com\",\"sourceIp\":\"203.0.113.0\",\"sendingAccountId\":\"123456789012\",\"messageId\":\"0102018b5e2f5e8f-1k4k1k4k-1k4k-1k4k-1k4k-1k4k1k4k1k4k-000000\",\"destination\":[\"recipient@example.com\"],\"headersTruncated\":false,\"headers\":[{\"name\":\"From\",\"value\":\"sender@example.com\"},{\"name\":\"To\",\"value\":\"recipient@example.com\"},{\"name\":\"Subject\",\"value\":\"Weekly Digest\"},{\"name\":\"MIME-Version\",\"value\":\"1.0\"},{\"name\":\"Content-Type\",\"value\":\"text/html; charset=UTF-8\"},{\"name\":\"X-SES-CONFIGURATION-SET\",\"value\":\"sessypress-tracking\"}],\"commonHeaders\":{\"from\":[\"sender@example.com\"],\"to\":[\"recipient@example.com\"],\"messageId\":\"0102018b5e2f5e8f-1k4k1k4k-1k4k-1k4k-1k4k-1k4k1k4k1k4k-000000\",\"subject\":\"Weekly Digest\"},\"tags\":{\"ses:configuration-set\":[\"sessypress-tracking\"],\"campaign\":[\"weekly-digest-2026-01\"]}},\"open\":{\"ipAddress\":\"198.51.100.42\",\"timestamp\":\"2026-01-31T16:05:23.000Z\",\"userAgent\":\"Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1\"}}",
+  "Timestamp": "2026-01-31T16:05:24.000Z",
+  "SignatureVersion": "1",
+  "Signature": "EXAMPLE+SIGNATUREexample1234567890example==",
+  "SigningCertURL": "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-example.pem",
+  "UnsubscribeURL": "https://sns.us-east-1.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-east-1:123456789012:ses-event-publishing:example"
+}

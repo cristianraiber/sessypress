@@ -1,0 +1,12 @@
+{
+  "Type": "Notification",
+  "MessageId": "66f24f36-9hie-8g6g-2j3h-3gj1g4f1fj768",
+  "TopicArn": "arn:aws:sns:us-east-1:123456789012:ses-event-publishing",
+  "Subject": "Amazon SES Event Notification",
+  "Message": "{\"eventType\":\"Reject\",\"mail\":{\"timestamp\":\"2026-01-31T14:00:00.000Z\",\"source\":\"sender@example.com\",\"sourceArn\":\"arn:aws:ses:us-east-1:123456789012:identity/example.com\",\"sourceIp\":\"203.0.113.0\",\"sendingAccountId\":\"123456789012\",\"messageId\":\"0102018b5e2f5e8f-9i2i9i2i-9i2i-9i2i-9i2i-9i2i9i2i9i2i-000000\",\"destination\":[\"invalid@suppressed-domain.com\"],\"headersTruncated\":false,\"headers\":[{\"name\":\"From\",\"value\":\"sender@example.com\"},{\"name\":\"To\",\"value\":\"invalid@suppressed-domain.com\"},{\"name\":\"Subject\",\"value\":\"Monthly Newsletter\"},{\"name\":\"MIME-Version\",\"value\":\"1.0\"},{\"name\":\"Content-Type\",\"value\":\"text/html; charset=UTF-8\"},{\"name\":\"X-SES-CONFIGURATION-SET\",\"value\":\"sessypress-tracking\"}],\"commonHeaders\":{\"from\":[\"sender@example.com\"],\"to\":[\"invalid@suppressed-domain.com\"],\"messageId\":\"0102018b5e2f5e8f-9i2i9i2i-9i2i-9i2i-9i2i-9i2i9i2i9i2i-000000\",\"subject\":\"Monthly Newsletter\"},\"tags\":{\"ses:configuration-set\":[\"sessypress-tracking\"]}},\"reject\":{\"reason\":\"Bad content\"}}",
+  "Timestamp": "2026-01-31T14:00:01.000Z",
+  "SignatureVersion": "1",
+  "Signature": "EXAMPLE+SIGNATUREexample1234567890example==",
+  "SigningCertURL": "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-example.pem",
+  "UnsubscribeURL": "https://sns.us-east-1.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-east-1:123456789012:ses-event-publishing:example"
+}

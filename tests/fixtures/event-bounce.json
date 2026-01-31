@@ -1,0 +1,12 @@
+{
+  "Type": "Notification",
+  "MessageId": "77g35g47-0ijk-9h7h-3k4i-4hk2h5g2gk879",
+  "TopicArn": "arn:aws:sns:us-east-1:123456789012:ses-event-publishing",
+  "Subject": "Amazon SES Event Notification",
+  "Message": "{\"eventType\":\"Bounce\",\"mail\":{\"timestamp\":\"2026-01-31T15:00:00.000Z\",\"source\":\"sender@example.com\",\"sourceArn\":\"arn:aws:ses:us-east-1:123456789012:identity/example.com\",\"sourceIp\":\"203.0.113.0\",\"sendingAccountId\":\"123456789012\",\"messageId\":\"0102018b5e2f5e8f-0j3j0j3j-0j3j-0j3j-0j3j-0j3j0j3j0j3j-000000\",\"destination\":[\"bounce@simulator.amazonses.com\"],\"headersTruncated\":false,\"headers\":[{\"name\":\"From\",\"value\":\"sender@example.com\"},{\"name\":\"To\",\"value\":\"bounce@simulator.amazonses.com\"},{\"name\":\"Subject\",\"value\":\"Password Reset\"},{\"name\":\"MIME-Version\",\"value\":\"1.0\"},{\"name\":\"Content-Type\",\"value\":\"text/html; charset=UTF-8\"},{\"name\":\"X-SES-CONFIGURATION-SET\",\"value\":\"sessypress-tracking\"}],\"commonHeaders\":{\"from\":[\"sender@example.com\"],\"to\":[\"bounce@simulator.amazonses.com\"],\"messageId\":\"0102018b5e2f5e8f-0j3j0j3j-0j3j-0j3j-0j3j-0j3j0j3j0j3j-000000\",\"subject\":\"Password Reset\"},\"tags\":{\"ses:configuration-set\":[\"sessypress-tracking\"]}},\"bounce\":{\"bounceType\":\"Permanent\",\"bounceSubType\":\"General\",\"bouncedRecipients\":[{\"emailAddress\":\"bounce@simulator.amazonses.com\",\"action\":\"failed\",\"status\":\"5.1.1\",\"diagnosticCode\":\"smtp; 550 5.1.1 user unknown\"}],\"timestamp\":\"2026-01-31T15:00:02.000Z\",\"feedbackId\":\"0102018b5e2f5e8f-bounce-feedback-000000\",\"remoteMtaIp\":\"203.0.113.1\",\"reportingMTA\":\"dns; amazonses.com\"}}",
+  "Timestamp": "2026-01-31T15:00:03.000Z",
+  "SignatureVersion": "1",
+  "Signature": "EXAMPLE+SIGNATUREexample1234567890example==",
+  "SigningCertURL": "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-example.pem",
+  "UnsubscribeURL": "https://sns.us-east-1.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-east-1:123456789012:ses-event-publishing:example"
+}

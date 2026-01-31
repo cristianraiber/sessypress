@@ -1,0 +1,12 @@
+{
+  "Type": "Notification",
+  "MessageId": "00j68j70-3lmn-2k0k-6n7l-7kn5k8j5jn102",
+  "TopicArn": "arn:aws:sns:us-east-1:123456789012:ses-event-publishing",
+  "Subject": "Amazon SES Event Notification",
+  "Message": "{\"eventType\":\"DeliveryDelay\",\"mail\":{\"timestamp\":\"2026-01-31T17:00:00.000Z\",\"source\":\"sender@example.com\",\"sourceArn\":\"arn:aws:ses:us-east-1:123456789012:identity/example.com\",\"sourceIp\":\"203.0.113.0\",\"sendingAccountId\":\"123456789012\",\"messageId\":\"0102018b5e2f5e8f-3m6m3m6m-3m6m-3m6m-3m6m-3m6m3m6m3m6m-000000\",\"destination\":[\"delayed@example.com\"],\"headersTruncated\":false,\"headers\":[{\"name\":\"From\",\"value\":\"sender@example.com\"},{\"name\":\"To\",\"value\":\"delayed@example.com\"},{\"name\":\"Subject\",\"value\":\"Important Notification\"},{\"name\":\"MIME-Version\",\"value\":\"1.0\"},{\"name\":\"Content-Type\",\"value\":\"text/html; charset=UTF-8\"},{\"name\":\"X-SES-CONFIGURATION-SET\",\"value\":\"sessypress-tracking\"}],\"commonHeaders\":{\"from\":[\"sender@example.com\"],\"to\":[\"delayed@example.com\"],\"messageId\":\"0102018b5e2f5e8f-3m6m3m6m-3m6m-3m6m-3m6m-3m6m3m6m3m6m-000000\",\"subject\":\"Important Notification\"},\"tags\":{\"ses:configuration-set\":[\"sessypress-tracking\"]}},\"deliveryDelay\":{\"delayType\":\"TransientCommunicationFailure\",\"expirationTime\":\"2026-01-31T23:00:00.000Z\",\"delayedRecipients\":[{\"emailAddress\":\"delayed@example.com\",\"status\":\"4.4.1\",\"diagnosticCode\":\"smtp; 421 4.4.1 Service not available - try again later\"}],\"timestamp\":\"2026-01-31T17:15:00.000Z\",\"reportingMTA\":\"dns; a8-123.smtp-out.amazonses.com\"}}",
+  "Timestamp": "2026-01-31T17:15:01.000Z",
+  "SignatureVersion": "1",
+  "Signature": "EXAMPLE+SIGNATUREexample1234567890example==",
+  "SigningCertURL": "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-example.pem",
+  "UnsubscribeURL": "https://sns.us-east-1.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-east-1:123456789012:ses-event-publishing:example"
+}

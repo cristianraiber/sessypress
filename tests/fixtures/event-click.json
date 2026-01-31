@@ -1,0 +1,12 @@
+{
+  "Type": "Notification",
+  "MessageId": "99i57i69-2klm-1j9j-5m6k-6jm4j7i4im091",
+  "TopicArn": "arn:aws:sns:us-east-1:123456789012:ses-event-publishing",
+  "Subject": "Amazon SES Event Notification",
+  "Message": "{\"eventType\":\"Click\",\"mail\":{\"timestamp\":\"2026-01-31T16:00:00.000Z\",\"source\":\"sender@example.com\",\"sourceArn\":\"arn:aws:ses:us-east-1:123456789012:identity/example.com\",\"sourceIp\":\"203.0.113.0\",\"sendingAccountId\":\"123456789012\",\"messageId\":\"0102018b5e2f5e8f-2l5l2l5l-2l5l-2l5l-2l5l-2l5l2l5l2l5l-000000\",\"destination\":[\"recipient@example.com\"],\"headersTruncated\":false,\"headers\":[{\"name\":\"From\",\"value\":\"sender@example.com\"},{\"name\":\"To\",\"value\":\"recipient@example.com\"},{\"name\":\"Subject\",\"value\":\"New Blog Post\"},{\"name\":\"MIME-Version\",\"value\":\"1.0\"},{\"name\":\"Content-Type\",\"value\":\"text/html; charset=UTF-8\"},{\"name\":\"X-SES-CONFIGURATION-SET\",\"value\":\"sessypress-tracking\"}],\"commonHeaders\":{\"from\":[\"sender@example.com\"],\"to\":[\"recipient@example.com\"],\"messageId\":\"0102018b5e2f5e8f-2l5l2l5l-2l5l-2l5l-2l5l-2l5l2l5l2l5l-000000\",\"subject\":\"New Blog Post\"},\"tags\":{\"ses:configuration-set\":[\"sessypress-tracking\"],\"campaign\":[\"blog-notification\"],\"utm_source\":[\"email\"],\"utm_medium\":[\"newsletter\"],\"utm_campaign\":[\"january-2026\"]}},\"click\":{\"ipAddress\":\"198.51.100.42\",\"timestamp\":\"2026-01-31T16:10:45.000Z\",\"userAgent\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\",\"link\":\"https://example.com/blog/new-feature-announcement?utm_source=email&utm_medium=newsletter&utm_campaign=january-2026\",\"linkTags\":{\"campaign\":[\"january-2026\"],\"post_id\":[\"12345\"]}}}",
+  "Timestamp": "2026-01-31T16:10:46.000Z",
+  "SignatureVersion": "1",
+  "Signature": "EXAMPLE+SIGNATUREexample1234567890example==",
+  "SigningCertURL": "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-example.pem",
+  "UnsubscribeURL": "https://sns.us-east-1.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-east-1:123456789012:ses-event-publishing:example"
+}

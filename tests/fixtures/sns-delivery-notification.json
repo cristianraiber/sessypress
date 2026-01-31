@@ -1,0 +1,12 @@
+{
+  "Type": "Notification",
+  "MessageId": "44d02d14-7fgc-6e4e-0h1f-1eh9e2d9dh546",
+  "TopicArn": "arn:aws:sns:us-east-1:123456789012:ses-email-notifications",
+  "Subject": "Amazon SES Email Event Notification",
+  "Message": "{\"notificationType\":\"Delivery\",\"delivery\":{\"timestamp\":\"2026-01-31T12:00:00.000Z\",\"processingTimeMillis\":1234,\"recipients\":[\"success@simulator.amazonses.com\"],\"smtpResponse\":\"250 2.0.0 OK 1643623200 example.smtp.server\",\"reportingMTA\":\"a8-123.smtp-out.amazonses.com\",\"remoteMtaIp\":\"203.0.113.1\"},\"mail\":{\"timestamp\":\"2026-01-31T11:59:58.000Z\",\"source\":\"sender@example.com\",\"sourceArn\":\"arn:aws:ses:us-east-1:123456789012:identity/example.com\",\"sourceIp\":\"203.0.113.0\",\"sendingAccountId\":\"123456789012\",\"messageId\":\"0102018b5e2f5e8f-7g0g7g0g-7g0g-7g0g-7g0g-7g0g7g0g7g0g-000000\",\"destination\":[\"success@simulator.amazonses.com\"],\"headersTruncated\":false,\"headers\":[{\"name\":\"From\",\"value\":\"sender@example.com\"},{\"name\":\"To\",\"value\":\"success@simulator.amazonses.com\"},{\"name\":\"Subject\",\"value\":\"Order Confirmation\"},{\"name\":\"MIME-Version\",\"value\":\"1.0\"},{\"name\":\"Content-Type\",\"value\":\"text/html; charset=UTF-8\"}],\"commonHeaders\":{\"from\":[\"sender@example.com\"],\"to\":[\"success@simulator.amazonses.com\"],\"messageId\":\"0102018b5e2f5e8f-7g0g7g0g-7g0g-7g0g-7g0g-7g0g7g0g7g0g-000000\",\"subject\":\"Order Confirmation\"}}}",
+  "Timestamp": "2026-01-31T12:00:01.000Z",
+  "SignatureVersion": "1",
+  "Signature": "EXAMPLE+SIGNATUREexample1234567890example==",
+  "SigningCertURL": "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-example.pem",
+  "UnsubscribeURL": "https://sns.us-east-1.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-east-1:123456789012:ses-email-notifications:example"
+}

@@ -1,0 +1,12 @@
+{
+  "Type": "Notification",
+  "MessageId": "55e13e25-8ghd-7f5f-1i2g-2fi0f3e0ei657",
+  "TopicArn": "arn:aws:sns:us-east-1:123456789012:ses-event-publishing",
+  "Subject": "Amazon SES Event Notification",
+  "Message": "{\"eventType\":\"Send\",\"mail\":{\"timestamp\":\"2026-01-31T13:00:00.000Z\",\"source\":\"sender@example.com\",\"sourceArn\":\"arn:aws:ses:us-east-1:123456789012:identity/example.com\",\"sourceIp\":\"203.0.113.0\",\"sendingAccountId\":\"123456789012\",\"messageId\":\"0102018b5e2f5e8f-8h1h8h1h-8h1h-8h1h-8h1h-8h1h8h1h8h1h-000000\",\"destination\":[\"recipient@example.com\"],\"headersTruncated\":false,\"headers\":[{\"name\":\"From\",\"value\":\"sender@example.com\"},{\"name\":\"To\",\"value\":\"recipient@example.com\"},{\"name\":\"Subject\",\"value\":\"Welcome to Our Service\"},{\"name\":\"MIME-Version\",\"value\":\"1.0\"},{\"name\":\"Content-Type\",\"value\":\"text/html; charset=UTF-8\"},{\"name\":\"X-SES-CONFIGURATION-SET\",\"value\":\"sessypress-tracking\"}],\"commonHeaders\":{\"from\":[\"sender@example.com\"],\"to\":[\"recipient@example.com\"],\"messageId\":\"0102018b5e2f5e8f-8h1h8h1h-8h1h-8h1h-8h1h-8h1h8h1h8h1h-000000\",\"subject\":\"Welcome to Our Service\"},\"tags\":{\"ses:configuration-set\":[\"sessypress-tracking\"],\"ses:source-ip\":[\"203.0.113.0\"],\"ses:from-domain\":[\"example.com\"],\"ses:caller-identity\":[\"wordpress-ses-plugin\"]}},\"send\":{}}",
+  "Timestamp": "2026-01-31T13:00:01.000Z",
+  "SignatureVersion": "1",
+  "Signature": "EXAMPLE+SIGNATUREexample1234567890example==",
+  "SigningCertURL": "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-example.pem",
+  "UnsubscribeURL": "https://sns.us-east-1.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-east-1:123456789012:ses-event-publishing:example"
+}
